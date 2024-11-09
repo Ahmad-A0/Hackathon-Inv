@@ -48,7 +48,6 @@ const DialogContent = React.forwardRef<
         <span className="sr-only">Close</span>
       </DialogPrimitive.Close>
     </DialogPrimitive.Content>
-    <p id="dialog-description">This is a dialog.</p>
   </DialogPortal>
 ))
 DialogContent.displayName = DialogPrimitive.Content.displayName
