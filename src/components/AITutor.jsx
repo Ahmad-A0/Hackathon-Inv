@@ -12,17 +12,19 @@ import {
 const AITutor = ({ speaking, setSpeaking, language, translations }) => {
     const [isRecording, setIsRecording] = useState(false);
     const [response, setResponse] = useState('');
-    const [audioBase64, setAudioBase64] = useState('');
-    const recordingDataRef = useRef(null);
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [error, setError] = useState(null);
+    const recorderRef = useRef(null);
     const streamRef = useRef(null);
 
     const handleStartRecording = async () => {
         try {
-            const recordingData = await startAudioRecording();
-            recordingDataRef.current = recordingData;
-            streamRef.current = recordingData.stream;
+            const { recorder, stream } = await startAudioRecording();
+            recorderRef.current = recorder;
+            streamRef.current = stream;
             setIsRecording(true);
             setSpeaking?.(true);
+            setError(null);
         } catch (error) {
             console.error('Error starting recording:', error);
             setResponse('Error accessing microphone. Please try again.');
@@ -30,27 +32,31 @@ const AITutor = ({ speaking, setSpeaking, language, translations }) => {
     };
 
     const handleStopRecording = async () => {
-        try {
-            const wavBlob = await stopAudioRecording(recordingDataRef.current, streamRef.current);
-            if (wavBlob) {
-                const base64Audio = await processAudioBlob(wavBlob);
-                setAudioBase64(base64Audio);
-                const result = await submitAudioToOpenAI(base64Audio);
-                setResponse(result.text);
+        if (!recorderRef.current) return;
 
-                if (result.audioData) {
-                    const audio = new Audio(`data:audio/wav;base64,${result.audioData}`);
-                    audio.play().catch(error => {
-                        console.error('Error playing audio:', error);
-                    });
-                }
-            }
-        } catch (error) {
-            console.error(error);
-            setResponse('Error processing audio. Please try again.');
-        }
         setIsRecording(false);
         setSpeaking?.(false);
+        setIsProcessing(true);
+        setError(null);
+
+        try {
+            const audioBlob = await stopAudioRecording(recorderRef.current, streamRef.current);
+            const base64Audio = await processAudioBlob(audioBlob);
+            const result = await submitAudioToOpenAI(base64Audio);
+            setResponse(result.text);
+
+            if (result.audioData) {
+                const audio = new Audio(`data:audio/mpeg;base64,${result.audioData}`);
+                await audio.play();
+            }
+        } catch (error) {
+            console.error('Error processing recording:', error);
+            setError(error.message);
+        } finally {
+            setIsProcessing(false);
+            recorderRef.current = null;
+            streamRef.current = null;
+        }
     };
 
     return (
@@ -63,7 +69,16 @@ const AITutor = ({ speaking, setSpeaking, language, translations }) => {
                 </div>
 
                 <div className="min-h-[120px] bg-zinc-800/30 backdrop-blur-sm rounded-xl p-5 font-medium border border-zinc-700/50">
-                    {response || translations.explanation}
+                    {error ? (
+                        <div className="text-red-400">{error}</div>
+                    ) : isProcessing ? (
+                        <div className="flex flex-col items-center justify-center space-y-4">
+                            <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+                            <div className="text-primary">Processing your response...</div>
+                        </div>
+                    ) : (
+                        response || translations.explanation
+                    )}
                 </div>
 
                 <div className="flex justify-center items-center min-h-[160px] relative">
@@ -85,11 +100,13 @@ const AITutor = ({ speaking, setSpeaking, language, translations }) => {
                                     : 'bg-zinc-800 text-white hover:bg-zinc-700 hover:scale-105 transition-all duration-200'
                             }
                             shadow-lg hover:shadow-xl border border-zinc-700/50
+                            ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''}
                         `}
                         onMouseDown={handleStartRecording}
                         onMouseUp={handleStopRecording}
                         onTouchStart={handleStartRecording}
                         onTouchEnd={handleStopRecording}
+                        disabled={isProcessing}
                     >
                         <div className="flex flex-col items-center justify-center space-y-2">
                             {isRecording ? (
@@ -103,19 +120,13 @@ const AITutor = ({ speaking, setSpeaking, language, translations }) => {
                                 <>
                                     <MicOff className="h-8 w-8" />
                                     <span className="text-xs font-medium">
-                                        {translations.holdToSpeak}
+                                        {isProcessing ? 'Processing...' : translations.holdToSpeak}
                                     </span>
                                 </>
                             )}
                         </div>
                     </Button>
                 </div>
-
-                {audioBase64 && (
-                    <div className="text-sm bg-zinc-800/30 backdrop-blur-sm rounded-xl p-4 font-medium border border-zinc-700/50">
-                        Audio recorded successfully
-                    </div>
-                )}
             </div>
         </Card>
     );

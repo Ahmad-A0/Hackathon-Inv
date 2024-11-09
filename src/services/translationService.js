@@ -72,7 +72,7 @@ export async function generateTranslations(targetLanguage) {
         feedback: "Feedback"`;
 
         const response = await openai.chat.completions.create({
-            model: 'gpt-4',  // Changed to use standard GPT-4 model
+            model: 'gpt-4o-mini',  // Changed to use standard GPT-4 model
             messages: [
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: userPrompt },
@@ -137,7 +137,7 @@ export async function markSolution(solution, language) {
         - Suggestions for improvement`;
 
         const response = await openai.chat.completions.create({
-            model: 'gpt-4',  // Changed to use standard GPT-4 model
+            model: 'gpt-4o-mini',  
             messages: [
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: solution },
